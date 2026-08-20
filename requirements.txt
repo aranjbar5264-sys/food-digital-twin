@@ -6,3 +6,4 @@ numpy
 openpyxl
 scikit-learn
 joblib
+xgboost
