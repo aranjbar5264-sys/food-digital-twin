@@ -1,26 +1,24 @@
 ###############################################################
 # FOOD DIGITAL TWIN ENGINE
-# CLOUD / GITHUB / RENDER VERSION
+# CLOUD-READY VERSION 2.0
 #
-# Version: 2.0
+# Product-independent Digital Twin Engine
 #
-# Architecture:
+# Designed for:
+#   Local PC
+#   Render
+#   Cloud Server
+#   Future Mobile Application
 #
-#       Cloud API
-#           ↓
-#   DigitalTwinEngine
-#           ↓
-#     AI Models (.pkl)
-#           ↓
-# Experimental Data (.xlsx)
-#           ↓
-# Quality Prediction
-#           ↓
-# Shelf-Life Prediction
+# IMPORTANT:
+#   No Windows-specific paths are used.
+#   Data and models are loaded relative to the project folder.
 ###############################################################
 
 import os
 import warnings
+from pathlib import Path
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -34,72 +32,112 @@ warnings.filterwarnings("ignore")
 
 class DigitalTwinEngine:
 
-    ###########################################################
-    # CONSTRUCTOR
-    ###########################################################
-
     def __init__(self, product_config):
 
         self.config = product_config
 
-        self.product_name = product_config["product_name"]
-
         #######################################################
-        # Resolve paths
-        #
-        # Cloud deployment:
-        # All files are located relative to the application
-        # directory / GitHub repository.
+        # PROJECT ROOT
         #######################################################
 
-        self.base_dir = os.path.dirname(
-            os.path.abspath(__file__)
-        )
+        self.project_root = Path(
+            __file__
+        ).resolve().parent
 
-        self.data_file = self._resolve_path(
+        #######################################################
+        # PRODUCT
+        #######################################################
+
+        self.product_name = product_config[
+            "product_name"
+        ]
+
+        #######################################################
+        # DATA FILE
+        #######################################################
+
+        configured_data_file = Path(
             product_config["data_file"]
         )
 
-        self.model_folder = self._resolve_path(
+        if configured_data_file.is_absolute():
+
+            self.data_file = (
+                configured_data_file
+            )
+
+        else:
+
+            self.data_file = (
+                self.project_root
+                / configured_data_file
+            )
+
+        #######################################################
+        # MODEL FOLDER
+        #######################################################
+
+        configured_model_folder = Path(
             product_config["model_folder"]
         )
 
-        #######################################################
-        # Input variables
-        #######################################################
+        if configured_model_folder.is_absolute():
 
-        self.input_features = product_config[
-            "input_features"
-        ]
+            self.model_folder = (
+                configured_model_folder
+            )
 
-        #######################################################
-        # Quality targets
-        #######################################################
+        else:
 
-        self.targets = product_config[
-            "targets"
-        ]
+            self.model_folder = (
+                self.project_root
+                / configured_model_folder
+            )
 
         #######################################################
-        # Display names
+        # INPUT FEATURES
         #######################################################
 
-        self.display_names = product_config.get(
-            "display_names",
-            {}
+        self.input_features = (
+            product_config[
+                "input_features"
+            ]
         )
 
         #######################################################
-        # Quality rules
+        # QUALITY TARGETS
         #######################################################
 
-        self.quality_rules = product_config.get(
-            "quality_rules",
-            {}
+        self.targets = (
+            product_config[
+                "targets"
+            ]
         )
 
         #######################################################
-        # Minimum acceptable attributes
+        # DISPLAY NAMES
+        #######################################################
+
+        self.display_names = (
+            product_config.get(
+                "display_names",
+                {}
+            )
+        )
+
+        #######################################################
+        # QUALITY RULES
+        #######################################################
+
+        self.quality_rules = (
+            product_config.get(
+                "quality_rules",
+                {}
+            )
+        )
+
+        #######################################################
+        # MINIMUM ACCEPTABLE ATTRIBUTES
         #######################################################
 
         self.minimum_acceptable_attributes = (
@@ -110,12 +148,14 @@ class DigitalTwinEngine:
         )
 
         #######################################################
-        # Shelf-life configuration
+        # SHELF LIFE CONFIGURATION
         #######################################################
 
-        shelf_config = product_config.get(
-            "shelf_life",
-            {}
+        shelf_config = (
+            product_config.get(
+                "shelf_life",
+                {}
+            )
         )
 
         self.ambient_reference_limit = (
@@ -140,7 +180,7 @@ class DigitalTwinEngine:
         )
 
         #######################################################
-        # Model containers
+        # MODEL CONTAINERS
         #######################################################
 
         self.models = {}
@@ -148,7 +188,7 @@ class DigitalTwinEngine:
         self.scalers = {}
 
         #######################################################
-        # Experimental data
+        # EXPERIMENTAL DATA
         #######################################################
 
         self.experimental_data = None
@@ -156,7 +196,7 @@ class DigitalTwinEngine:
         self.experimental_domain = {}
 
         #######################################################
-        # Initialize
+        # INITIALIZATION
         #######################################################
 
         self.load_experimental_data()
@@ -168,49 +208,18 @@ class DigitalTwinEngine:
         self.validate_system()
 
 
-    ###########################################################
-    # PATH RESOLUTION
-    ###########################################################
-
-    def _resolve_path(self, path):
-
-        """
-        Convert relative paths to paths relative to this
-        Python application.
-
-        Examples:
-
-            data/loquat_data.xlsx
-
-        becomes:
-
-            <repository>/data/loquat_data.xlsx
-
-        Absolute paths are preserved.
-        """
-
-        if os.path.isabs(path):
-
-            return path
-
-        return os.path.join(
-            self.base_dir,
-            path
-        )
-
-
-    ###########################################################
+    ############################################################
     # LOAD EXPERIMENTAL DATA
-    ###########################################################
+    ############################################################
 
     def load_experimental_data(self):
 
-        if not os.path.exists(self.data_file):
+        if not self.data_file.exists():
 
             raise FileNotFoundError(
                 "Experimental data file not found:\n"
                 f"{self.data_file}\n\n"
-                "Please check the GitHub repository structure."
+                "Please check the project data folder."
             )
 
         try:
@@ -222,9 +231,9 @@ class DigitalTwinEngine:
         except Exception as e:
 
             raise RuntimeError(
-                "Could not read experimental data file:\n"
-                f"{self.data_file}\n\n"
-                f"Original error: {e}"
+                "Could not read experimental data file.\n"
+                f"File: {self.data_file}\n"
+                f"Error: {e}"
             )
 
         #######################################################
@@ -235,7 +244,8 @@ class DigitalTwinEngine:
             :,
             ~df.columns.astype(str)
             .str.contains(
-                "^Unnamed"
+                "^Unnamed",
+                regex=True
             )
         ]
 
@@ -252,7 +262,6 @@ class DigitalTwinEngine:
         missing = [
 
             column
-
             for column in required_columns
 
             if column not in df.columns
@@ -262,7 +271,8 @@ class DigitalTwinEngine:
         if missing:
 
             raise ValueError(
-                "Missing required columns in experimental data:\n"
+                "Missing required columns "
+                "in experimental data:\n"
                 + str(missing)
             )
 
@@ -278,7 +288,7 @@ class DigitalTwinEngine:
             )
 
         #######################################################
-        # Remove invalid input rows
+        # Keep valid input rows
         #######################################################
 
         df = df.dropna(
@@ -288,7 +298,8 @@ class DigitalTwinEngine:
         if df.empty:
 
             raise ValueError(
-                "Experimental data contains no valid rows."
+                "Experimental dataset contains "
+                "no valid input rows."
             )
 
         #######################################################
@@ -310,26 +321,32 @@ class DigitalTwinEngine:
         for feature in self.input_features:
 
             values = (
-
                 df[feature]
                 .dropna()
                 .unique()
                 .tolist()
-
             )
+
+            if not values:
+
+                raise RuntimeError(
+                    f"No experimental values found "
+                    f"for {feature}."
+                )
 
             self.experimental_domain[
                 feature
-            ] = sorted(
-                values
-            )
+            ] = sorted(values)
 
 
-    ###########################################################
+    ############################################################
     # FIND MODEL FILE
-    ###########################################################
+    ############################################################
 
-    def find_model_file(self, target):
+    def find_model_file(
+        self,
+        target
+    ):
 
         candidates = [
 
@@ -351,56 +368,47 @@ class DigitalTwinEngine:
 
         for filename in candidates:
 
-            path = os.path.join(
-                self.model_folder,
-                filename
+            path = (
+                self.model_folder
+                / filename
             )
 
-            if os.path.exists(path):
+            if path.exists():
 
                 return path
+
 
         #######################################################
         # Recursive search
         #######################################################
 
-        if os.path.exists(
-            self.model_folder
-        ):
+        target_lower = target.lower()
 
-            target_lower = target.lower()
+        if self.model_folder.exists():
 
-            for root, dirs, files in os.walk(
-                self.model_folder
+            for path in self.model_folder.rglob(
+                "*.pkl"
             ):
 
-                for file in files:
+                filename = (
+                    path.name.lower()
+                )
 
-                    lower = file.lower()
+                if target_lower in filename:
 
-                    if (
-
-                        target_lower in lower
-
-                        and
-
-                        lower.endswith(".pkl")
-
-                    ):
-
-                        return os.path.join(
-                            root,
-                            file
-                        )
+                    return path
 
         return None
 
 
-    ###########################################################
+    ############################################################
     # FIND SCALER FILE
-    ###########################################################
+    ############################################################
 
-    def find_scaler_file(self, target):
+    def find_scaler_file(
+        self,
+        target
+    ):
 
         candidates = [
 
@@ -418,81 +426,77 @@ class DigitalTwinEngine:
 
         for filename in candidates:
 
-            path = os.path.join(
-                self.model_folder,
-                filename
+            path = (
+                self.model_folder
+                / filename
             )
 
-            if os.path.exists(path):
+            if path.exists():
 
                 return path
+
 
         #######################################################
         # Recursive search
         #######################################################
 
-        if os.path.exists(
-            self.model_folder
-        ):
+        target_lower = target.lower()
 
-            target_lower = target.lower()
+        if self.model_folder.exists():
 
-            for root, dirs, files in os.walk(
-                self.model_folder
+            for path in self.model_folder.rglob(
+                "*.pkl"
             ):
 
-                for file in files:
+                filename = (
+                    path.name.lower()
+                )
 
-                    lower = file.lower()
+                if (
+                    "scaler" in filename
+                    and target_lower in filename
+                ):
 
-                    if (
-
-                        "scaler" in lower
-
-                        and
-
-                        target_lower in lower
-
-                        and
-
-                        lower.endswith(".pkl")
-
-                    ):
-
-                        return os.path.join(
-                            root,
-                            file
-                        )
+                    return path
 
         return None
 
 
-    ###########################################################
+    ############################################################
     # LOAD AI MODELS
-    ###########################################################
+    ############################################################
 
     def load_models(self):
+
+        if not self.model_folder.exists():
+
+            raise FileNotFoundError(
+                "Model folder not found:\n"
+                f"{self.model_folder}"
+            )
 
         failed = []
 
         for target in self.targets:
 
-            model_file = self.find_model_file(
-                target
+            model_file = (
+                self.find_model_file(
+                    target
+                )
             )
 
             if model_file is None:
 
-                failed.append(
-                    target
-                )
+                failed.append(target)
 
                 continue
 
             try:
 
-                self.models[target] = joblib.load(
-                    model_file
+                self.models[target] = (
+                    joblib.load(
+                        model_file
+                    )
                 )
 
             except Exception as e:
@@ -502,37 +506,49 @@ class DigitalTwinEngine:
                     f"{target}: {e}"
                 )
 
-                failed.append(
-                    target
-                )
+                failed.append(target)
 
         #######################################################
-        # IMPORTANT
-        #
-        # We allow partial model loading.
-        #
-        # This makes the cloud API more robust.
+        # At least one model required
         #######################################################
 
         if len(self.models) == 0:
 
             raise RuntimeError(
                 "No AI models could be loaded.\n"
-                f"Model directory: {self.model_folder}\n"
-                f"Expected targets: {self.targets}"
+                f"Model folder: {self.model_folder}"
             )
 
+        #######################################################
+        # Informational message
+        #######################################################
 
-    ###########################################################
+        if failed:
+
+            print(
+                "WARNING: The following models "
+                "could not be loaded:"
+            )
+
+            for target in failed:
+
+                print(
+                    f"  - {target}"
+                )
+
+
+    ############################################################
     # LOAD SCALERS
-    ###########################################################
+    ############################################################
 
     def load_scalers(self):
 
         for target in self.models:
 
-            scaler_file = self.find_scaler_file(
-                target
+            scaler_file = (
+                self.find_scaler_file(
+                    target
+                )
             )
 
             if scaler_file is None:
@@ -541,21 +557,23 @@ class DigitalTwinEngine:
 
             try:
 
-                self.scalers[target] = joblib.load(
-                    scaler_file
+                self.scalers[target] = (
+                    joblib.load(
+                        scaler_file
+                    )
                 )
 
             except Exception as e:
 
                 print(
-                    f"Could not load scaler "
-                    f"{target}: {e}"
+                    f"WARNING: Could not load scaler "
+                    f"for {target}: {e}"
                 )
 
 
-    ###########################################################
+    ############################################################
     # VALIDATE SYSTEM
-    ###########################################################
+    ############################################################
 
     def validate_system(self):
 
@@ -571,25 +589,24 @@ class DigitalTwinEngine:
                 "No trained AI models are available."
             )
 
-        #######################################################
-        # Validate experimental domain
-        #######################################################
-
         for feature in self.input_features:
 
             if feature not in self.experimental_domain:
 
                 raise RuntimeError(
                     f"No experimental domain "
-                    f"available for {feature}"
+                    f"for {feature}."
                 )
 
 
-    ###########################################################
+    ############################################################
     # PREPARE INPUT
-    ###########################################################
+    ############################################################
 
-    def prepare_input(self, inputs):
+    def prepare_input(
+        self,
+        inputs
+    ):
 
         missing = [
 
@@ -608,45 +625,27 @@ class DigitalTwinEngine:
                 + str(missing)
             )
 
-        #######################################################
-        # Numeric conversion
-        #######################################################
-
-        values = {}
-
-        for feature in self.input_features:
-
-            try:
-
-                values[feature] = float(
-                    inputs[feature]
-                )
-
-            except Exception:
-
-                raise ValueError(
-                    f"Invalid numeric value for "
-                    f"{feature}: "
-                    f"{inputs[feature]}"
-                )
-
         return pd.DataFrame(
-            [values],
+            [
+                [
+                    float(inputs[feature])
+                    for feature in self.input_features
+                ]
+            ],
             columns=self.input_features
         )
 
 
-    ###########################################################
+    ############################################################
     # INPUT VALIDATION
-    ###########################################################
+    ############################################################
 
-    def validate_inputs(self, inputs):
+    def validate_inputs(
+        self,
+        inputs
+    ):
 
         warnings_list = []
-
-        #######################################################
-        # Domain validation
-        #######################################################
 
         for feature in self.input_features:
 
@@ -654,9 +653,11 @@ class DigitalTwinEngine:
                 inputs[feature]
             )
 
-            domain = self.experimental_domain[
-                feature
-            ]
+            domain = (
+                self.experimental_domain[
+                    feature
+                ]
+            )
 
             minimum = min(domain)
 
@@ -665,25 +666,22 @@ class DigitalTwinEngine:
             if value < minimum:
 
                 warnings_list.append(
-
                     f"{feature}={value:g} "
                     f"is below experimental "
                     f"minimum ({minimum:g})."
-
                 )
 
             elif value > maximum:
 
                 warnings_list.append(
-
                     f"{feature}={value:g} "
                     f"is above experimental "
                     f"maximum ({maximum:g})."
-
                 )
 
+
         #######################################################
-        # Check exact experimental combination
+        # Exact experimental combination
         #######################################################
 
         mask = np.ones(
@@ -710,19 +708,17 @@ class DigitalTwinEngine:
         if not mask.any():
 
             warnings_list.append(
-
                 "Input combination does not exactly "
                 "exist in the experimental dataset. "
                 "The AI model is being used for prediction."
-
             )
 
         return warnings_list
 
 
-    ###########################################################
+    ############################################################
     # AI PREDICTION
-    ###########################################################
+    ############################################################
 
     def predict_attribute(
         self,
@@ -744,7 +740,9 @@ class DigitalTwinEngine:
 
         if target in self.scalers:
 
-            X = self.scalers[target].transform(
+            X = self.scalers[
+                target
+            ].transform(
                 sample
             )
 
@@ -767,10 +765,9 @@ class DigitalTwinEngine:
         )
 
 
-    ###########################################################
-    # STAGE 1
-    # AI PREDICTION
-    ###########################################################
+    ############################################################
+    # STAGE 1 - AI PREDICTION
+    ############################################################
 
     def stage_1_ai_prediction(
         self,
@@ -808,9 +805,9 @@ class DigitalTwinEngine:
         )
 
 
-    ###########################################################
+    ############################################################
     # QUALITY RULE EVALUATION
-    ###########################################################
+    ############################################################
 
     def evaluate_attribute(
         self,
@@ -818,8 +815,10 @@ class DigitalTwinEngine:
         value
     ):
 
-        rule = self.quality_rules.get(
-            target
+        rule = (
+            self.quality_rules.get(
+                target
+            )
         )
 
         if rule is None:
@@ -830,19 +829,11 @@ class DigitalTwinEngine:
             "type"
         )
 
-        #######################################################
-        # Maximum
-        #######################################################
-
         if rule_type == "max":
 
             return (
                 value <= rule["max"]
             )
-
-        #######################################################
-        # Minimum
-        #######################################################
 
         if rule_type == "min":
 
@@ -850,52 +841,41 @@ class DigitalTwinEngine:
                 value >= rule["min"]
             )
 
-        #######################################################
-        # Range
-        #######################################################
-
         if rule_type == "range":
 
             return (
 
                 rule["min"]
-                <=
-                value
-                <=
-                rule["max"]
+                <= value
+                <= rule["max"]
 
             )
 
-        #######################################################
-        # Reference ± tolerance
-        #######################################################
-
         if rule_type == "reference":
 
-            reference = rule["reference"]
+            reference = (
+                rule["reference"]
+            )
 
-            tolerance = rule["tolerance"]
+            tolerance = (
+                rule["tolerance"]
+            )
 
             return (
 
                 reference - tolerance
-                <=
-                value
+                <= value
                 <=
                 reference + tolerance
 
             )
 
-        #######################################################
-        # Unknown rule
-        #######################################################
-
         return True
 
 
-    ###########################################################
+    ############################################################
     # EVALUATE QUALITY
-    ###########################################################
+    ############################################################
 
     def evaluate_quality(
         self,
@@ -916,9 +896,9 @@ class DigitalTwinEngine:
         return evaluation
 
 
-    ###########################################################
+    ############################################################
     # QUALITY SCORE
-    ###########################################################
+    ############################################################
 
     def calculate_quality_score(
         self,
@@ -933,7 +913,8 @@ class DigitalTwinEngine:
             )
 
         acceptable = sum(
-            evaluation.values()
+            bool(v)
+            for v in evaluation.values()
         )
 
         total = len(evaluation)
@@ -950,23 +931,21 @@ class DigitalTwinEngine:
         # Status
         #######################################################
 
-        threshold = min(
-            self.minimum_acceptable_attributes,
-            total
-        )
+        if acceptable >= max(
+            self.minimum_acceptable_attributes + 2,
+            1
+        ):
 
-        if acceptable >= threshold:
+            status = "EXCELLENT"
 
-            if score >= 85:
+        elif acceptable >= (
+            self.minimum_acceptable_attributes
+        ):
 
-                status = "EXCELLENT"
-
-            else:
-
-                status = "ACCEPTABLE"
+            status = "ACCEPTABLE"
 
         elif acceptable >= max(
-            threshold - 2,
+            self.minimum_acceptable_attributes - 2,
             1
         ):
 
@@ -982,26 +961,24 @@ class DigitalTwinEngine:
         )
 
 
-    ###########################################################
+    ############################################################
     # EXPERIMENTAL SHELF LIFE
-    ###########################################################
+    ############################################################
 
     def calculate_experimental_shelf_life(
         self,
         inputs
     ):
 
-        time_feature = self.config.get(
-            "time_feature"
+        time_feature = (
+            self.config.get(
+                "time_feature"
+            )
         )
 
         if time_feature is None:
 
             return None
-
-        #######################################################
-        # Treatment features
-        #######################################################
 
         treatment_features = [
 
@@ -1018,7 +995,7 @@ class DigitalTwinEngine:
         )
 
         #######################################################
-        # Select nearest experimental treatment
+        # Find nearest treatment conditions
         #######################################################
 
         for feature in treatment_features:
@@ -1045,7 +1022,9 @@ class DigitalTwinEngine:
             working_data = (
                 working_data[
                     np.isclose(
-                        working_data[feature],
+                        working_data[
+                            feature
+                        ],
                         nearest
                     )
                 ]
@@ -1061,18 +1040,15 @@ class DigitalTwinEngine:
 
         valid_times = []
 
-        time_values = sorted(
+        for time_value in sorted(
 
             working_data[
                 time_feature
-            ].dropna().unique()
+            ].unique()
 
-        )
-
-        for time_value in time_values:
+        ):
 
             day_data = (
-
                 working_data[
                     np.isclose(
                         working_data[
@@ -1081,7 +1057,6 @@ class DigitalTwinEngine:
                         time_value
                     )
                 ]
-
             )
 
             observed = {}
@@ -1101,8 +1076,10 @@ class DigitalTwinEngine:
 
                     continue
 
-                observed[target] = float(
-                    values.mean()
+                observed[target] = (
+                    float(
+                        values.mean()
+                    )
                 )
 
             if not observed:
@@ -1116,15 +1093,12 @@ class DigitalTwinEngine:
             )
 
             acceptable = sum(
-                evaluation.values()
+                bool(v)
+                for v in evaluation.values()
             )
 
-            if acceptable >= min(
-
-                self.minimum_acceptable_attributes,
-
-                len(evaluation)
-
+            if acceptable >= (
+                self.minimum_acceptable_attributes
             ):
 
                 valid_times.append(
@@ -1140,10 +1114,9 @@ class DigitalTwinEngine:
         )
 
 
-    ###########################################################
-    # STAGE 2
-    # EXPERIMENTAL ANCHOR
-    ###########################################################
+    ############################################################
+    # STAGE 2 - EXPERIMENTAL ANCHOR
+    ############################################################
 
     def stage_2_experimental_anchor(
         self,
@@ -1157,10 +1130,9 @@ class DigitalTwinEngine:
         )
 
 
-    ###########################################################
-    # STAGE 3
-    # PHYSICAL / TEMPERATURE CONSTRAINT
-    ###########################################################
+    ############################################################
+    # STAGE 3 - PHYSICAL / TEMPERATURE CONSTRAINT
+    ############################################################
 
     def stage_3_physical_constraint(
         self,
@@ -1168,8 +1140,10 @@ class DigitalTwinEngine:
         anchor
     ):
 
-        temperature_feature = self.config.get(
-            "temperature_feature"
+        temperature_feature = (
+            self.config.get(
+                "temperature_feature"
+            )
         )
 
         if temperature_feature is None:
@@ -1183,7 +1157,7 @@ class DigitalTwinEngine:
         )
 
         #######################################################
-        # If experimental anchor unavailable
+        # No experimental anchor
         #######################################################
 
         if anchor is None:
@@ -1201,31 +1175,21 @@ class DigitalTwinEngine:
                 )
 
         #######################################################
-        # Refrigerated conditions
-        #######################################################
-
-        if temperature <= 4:
-
-            return min(
-
-                anchor,
-
-                self.refrigerated_reference_limit
-
-            )
-
-        #######################################################
-        # Ambient / moderate temperature
+        # Reference temperature domain
         #######################################################
 
         if temperature <= 25:
 
+            if temperature <= 4:
+
+                return min(
+                    anchor,
+                    self.refrigerated_reference_limit
+                )
+
             return min(
-
                 anchor,
-
                 self.ambient_reference_limit
-
             )
 
         #######################################################
@@ -1238,34 +1202,29 @@ class DigitalTwinEngine:
             **
             (
                 (temperature - 25.0)
-                /
-                10.0
+                / 10.0
             )
 
         )
 
-        adjusted = anchor / factor
+        adjusted = (
+            anchor / factor
+        )
 
         adjusted = min(
-
             adjusted,
-
             self.ambient_reference_limit
-
         )
 
         return max(
-
             1.0,
-
             float(adjusted)
-
         )
 
 
-    ###########################################################
-    # SHELF LIFE ESTIMATION
-    ###########################################################
+    ############################################################
+    # SHELF LIFE
+    ############################################################
 
     def estimate_shelf_life(
         self,
@@ -1285,8 +1244,10 @@ class DigitalTwinEngine:
             )
         )
 
-        time_feature = self.config.get(
-            "time_feature"
+        time_feature = (
+            self.config.get(
+                "time_feature"
+            )
         )
 
         current_time = None
@@ -1299,26 +1260,14 @@ class DigitalTwinEngine:
                 ]
             )
 
-        #######################################################
-        # Remaining shelf life
-        #######################################################
-
         if (
-
             constrained is not None
-
-            and
-
-            current_time is not None
-
+            and current_time is not None
         ):
 
             remaining = max(
-
                 0.0,
-
                 constrained - current_time
-
             )
 
         else:
@@ -1342,9 +1291,9 @@ class DigitalTwinEngine:
         }
 
 
-    ###########################################################
-    # RISK ASSESSMENT
-    ###########################################################
+    ############################################################
+    # RISK
+    ############################################################
 
     def assess_risk(
         self,
@@ -1367,9 +1316,9 @@ class DigitalTwinEngine:
         return "LOW"
 
 
-    ###########################################################
+    ############################################################
     # RECOMMENDATION
-    ###########################################################
+    ############################################################
 
     def generate_recommendation(
         self,
@@ -1381,8 +1330,7 @@ class DigitalTwinEngine:
 
             return (
                 "Excellent quality. "
-                "The product can remain under "
-                "controlled storage conditions."
+                "Continue storage under controlled conditions."
             )
 
         if status == "ACCEPTABLE":
@@ -1397,8 +1345,7 @@ class DigitalTwinEngine:
 
             return (
                 "Quality deterioration detected. "
-                "The product should be sold soon or "
-                "storage conditions should be improved."
+                "Sell soon or improve storage conditions."
             )
 
         return (
@@ -1407,9 +1354,9 @@ class DigitalTwinEngine:
         )
 
 
-    ###########################################################
+    ############################################################
     # MAIN PREDICTION API
-    ###########################################################
+    ############################################################
 
     def predict(
         self,
@@ -1417,7 +1364,7 @@ class DigitalTwinEngine:
     ):
 
         #######################################################
-        # Validate input values
+        # Validate
         #######################################################
 
         validation_warnings = (
@@ -1427,15 +1374,13 @@ class DigitalTwinEngine:
         )
 
         #######################################################
-        # Stage 1: AI prediction
+        # Stage 1
         #######################################################
 
         predictions, prediction_warnings = (
-
             self.stage_1_ai_prediction(
                 inputs
             )
-
         )
 
         if not predictions:
@@ -1445,7 +1390,7 @@ class DigitalTwinEngine:
             )
 
         #######################################################
-        # Quality evaluation
+        # Quality
         #######################################################
 
         evaluation = (
@@ -1461,7 +1406,7 @@ class DigitalTwinEngine:
         )
 
         #######################################################
-        # Shelf-life estimation
+        # Shelf life
         #######################################################
 
         shelf_life = (
@@ -1474,8 +1419,10 @@ class DigitalTwinEngine:
         # Current time constraint
         #######################################################
 
-        time_feature = self.config.get(
-            "time_feature"
+        time_feature = (
+            self.config.get(
+                "time_feature"
+            )
         )
 
         current_time = None
@@ -1494,18 +1441,9 @@ class DigitalTwinEngine:
             ]
         )
 
-        #######################################################
-        # Shelf-life status
-        #######################################################
-
         if (
-
             constrained is not None
-
-            and
-
-            current_time is not None
-
+            and current_time is not None
         ):
 
             if current_time > constrained:
@@ -1518,16 +1456,12 @@ class DigitalTwinEngine:
                 )
 
             elif current_time >= (
-
                 constrained - 1.0
-
             ):
 
                 if status in [
-
                     "EXCELLENT",
                     "ACCEPTABLE"
-
                 ]:
 
                     status = "WARNING"
@@ -1600,5 +1534,5 @@ class DigitalTwinEngine:
 
 
 ###############################################################
-# END OF CLOUD DIGITAL TWIN ENGINE
+# END
 ###############################################################

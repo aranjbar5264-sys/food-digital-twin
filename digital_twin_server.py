@@ -1,30 +1,19 @@
 ###############################################################
 # FOOD DIGITAL TWIN API SERVER
-# CLOUD / GITHUB / RENDER VERSION
+# VERSION 2.0
 #
-# Version: 2.0
+# Portable / Local Server Version
 #
-# Architecture:
+# The server automatically searches for:
+#   1. Experimental Excel data
+#   2. AI model files
 #
-# User / Mobile App
-#        ↓
-#      HTTPS
-#        ↓
-#     Render
-#        ↓
-#    FastAPI API
-#        ↓
-# DigitalTwinEngine
-#        ↓
-# AI Models + Experimental Data
-#
-# IMPORTANT:
-# No local Windows paths are used.
-# All files are loaded relative to this project.
+# No fixed F:\... path is required.
 ###############################################################
 
 import os
-from pathlib import Path
+import glob
+import traceback
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -34,26 +23,312 @@ from digital_twin_engine import DigitalTwinEngine
 
 
 ###############################################################
-# PROJECT DIRECTORIES
+# PROJECT PATH
 ###############################################################
 
-# Directory containing this Python file
-BASE_DIR = Path(__file__).resolve().parent
-
-# Data directory
-DATA_DIR = BASE_DIR / "data"
-
-# Models directory
-MODELS_DIR = BASE_DIR / "models"
-
-
-###############################################################
-# FILE PATHS
-###############################################################
-
-LOQUAT_DATA_FILE = (
-    DATA_DIR / "loquat_data.xlsx"
+BASE_DIR = os.path.dirname(
+    os.path.abspath(__file__)
 )
+
+print("\n" + "=" * 70)
+print("FOOD DIGITAL TWIN SERVER")
+print("=" * 70)
+
+print("\nAPP DIRECTORY:")
+print(BASE_DIR)
+
+
+###############################################################
+# FIND PROJECT ROOT
+###############################################################
+
+PROJECT_ROOT = os.path.dirname(
+    BASE_DIR
+)
+
+print("\nPROJECT ROOT:")
+print(PROJECT_ROOT)
+
+
+###############################################################
+# SEARCH FUNCTION
+###############################################################
+
+def find_file_recursive(
+    root,
+    extensions=None,
+    keywords=None
+):
+
+    if extensions is None:
+        extensions = []
+
+    if keywords is None:
+        keywords = []
+
+    matches = []
+
+    for current_root, dirs, files in os.walk(root):
+
+        for filename in files:
+
+            lower_name = filename.lower()
+
+            ###################################################
+            # Extension filter
+            ###################################################
+
+            if extensions:
+
+                if not any(
+                    lower_name.endswith(ext.lower())
+                    for ext in extensions
+                ):
+
+                    continue
+
+            ###################################################
+            # Keyword filter
+            ###################################################
+
+            if keywords:
+
+                if not all(
+                    keyword.lower() in lower_name
+                    for keyword in keywords
+                ):
+
+                    continue
+
+            matches.append(
+                os.path.join(
+                    current_root,
+                    filename
+                )
+            )
+
+    return matches
+
+
+###############################################################
+# FIND EXPERIMENTAL DATA
+###############################################################
+
+def find_experimental_data():
+
+    ###########################################################
+    # First priority:
+    # common Excel names
+    ###########################################################
+
+    preferred_names = [
+
+        "loquat_data.xlsx",
+        "loquat_data.xls",
+        "Loquat.xlsx",
+        "Loquat.xls",
+        "Loquat(5).xlsx",
+        "Loquat(5).xls"
+
+    ]
+
+    search_roots = [
+
+        BASE_DIR,
+        PROJECT_ROOT
+
+    ]
+
+    ###########################################################
+    # Search preferred names
+    ###########################################################
+
+    for root in search_roots:
+
+        for preferred in preferred_names:
+
+            matches = glob.glob(
+                os.path.join(
+                    root,
+                    "**",
+                    preferred
+                ),
+                recursive=True
+            )
+
+            if matches:
+
+                return os.path.abspath(
+                    matches[0]
+                )
+
+    ###########################################################
+    # Search Excel files containing loquat
+    ###########################################################
+
+    for root in search_roots:
+
+        matches = find_file_recursive(
+
+            root,
+
+            extensions=[
+                ".xlsx",
+                ".xls"
+            ],
+
+            keywords=[
+                "loquat"
+            ]
+
+        )
+
+        if matches:
+
+            return os.path.abspath(
+                matches[0]
+            )
+
+    ###########################################################
+    # Search any Excel file as last resort
+    ###########################################################
+
+    for root in search_roots:
+
+        matches = find_file_recursive(
+
+            root,
+
+            extensions=[
+                ".xlsx",
+                ".xls"
+            ]
+
+        )
+
+        if matches:
+
+            return os.path.abspath(
+                matches[0]
+            )
+
+    return None
+
+
+###############################################################
+# FIND MODEL DIRECTORY
+###############################################################
+
+def find_model_directory():
+
+    ###########################################################
+    # Preferred model folders
+    ###########################################################
+
+    preferred = [
+
+        os.path.join(
+            BASE_DIR,
+            "MODELS"
+        ),
+
+        os.path.join(
+            BASE_DIR,
+            "models"
+        ),
+
+        os.path.join(
+            PROJECT_ROOT,
+            "MODELS"
+        ),
+
+        os.path.join(
+            PROJECT_ROOT,
+            "models"
+        )
+
+    ]
+
+    for folder in preferred:
+
+        if os.path.isdir(folder):
+
+            pkl_files = glob.glob(
+                os.path.join(
+                    folder,
+                    "**",
+                    "*.pkl"
+                ),
+                recursive=True
+            )
+
+            if pkl_files:
+
+                return os.path.abspath(
+                    folder
+                )
+
+    ###########################################################
+    # Search recursively for folders containing pkl
+    ###########################################################
+
+    for root, dirs, files in os.walk(
+        PROJECT_ROOT
+    ):
+
+        pkl_files = [
+
+            f for f in files
+
+            if f.lower().endswith(
+                ".pkl"
+            )
+
+        ]
+
+        if pkl_files:
+
+            return os.path.abspath(
+                root
+            )
+
+    return None
+
+
+###############################################################
+# LOCATE DATA
+###############################################################
+
+DATA_FILE = find_experimental_data()
+
+MODEL_FOLDER = find_model_directory()
+
+
+print("\n" + "-" * 70)
+
+print("EXPERIMENTAL DATA:")
+
+if DATA_FILE:
+
+    print(DATA_FILE)
+
+else:
+
+    print("NOT FOUND")
+
+
+print("\nMODEL FOLDER:")
+
+if MODEL_FOLDER:
+
+    print(MODEL_FOLDER)
+
+else:
+
+    print("NOT FOUND")
+
+print("-" * 70)
+
 
 ###############################################################
 # LOQUAT CONFIGURATION
@@ -64,19 +339,11 @@ LOQUAT_CONFIG = {
     "product_name":
         "Loquat",
 
-    ###########################################################
-    # CLOUD-RELATIVE DATA PATH
-    ###########################################################
-
     "data_file":
-        str(LOQUAT_DATA_FILE),
-
-    ###########################################################
-    # CLOUD-RELATIVE MODEL PATH
-    ###########################################################
+        DATA_FILE,
 
     "model_folder":
-        str(MODELS_DIR),
+        MODEL_FOLDER,
 
     ###########################################################
     # INPUT VARIABLES
@@ -85,7 +352,9 @@ LOQUAT_CONFIG = {
     "input_features": [
 
         "ColdPlasmaTime",
+
         "StorageTemperature",
+
         "Days"
 
     ],
@@ -97,13 +366,21 @@ LOQUAT_CONFIG = {
     "targets": [
 
         "Weight",
+
         "pH",
+
         "Brix",
+
         "TA",
+
         "Index",
+
         "Phenol",
+
         "Flavnoid",
+
         "Hardness",
+
         "Resilience"
 
     ],
@@ -273,15 +550,11 @@ LOQUAT_CONFIG = {
         6,
 
     ###########################################################
-    # TIME FEATURE
+    # TIME / TEMPERATURE
     ###########################################################
 
     "time_feature":
         "Days",
-
-    ###########################################################
-    # TEMPERATURE FEATURE
-    ###########################################################
 
     "temperature_feature":
         "StorageTemperature",
@@ -315,10 +588,8 @@ api = FastAPI(
     title=
         "Food Digital Twin API",
 
-    description=(
-        "Cloud-based AI Digital Twin "
-        "for food quality and shelf-life prediction."
-    ),
+    description=
+        "AI-based Quality and Shelf-Life Prediction Engine",
 
     version=
         "2.0.0"
@@ -327,7 +598,7 @@ api = FastAPI(
 
 
 ###############################################################
-# GLOBAL ENGINE VARIABLES
+# ENGINE INITIALIZATION
 ###############################################################
 
 twin = None
@@ -337,75 +608,65 @@ ENGINE_READY = False
 ENGINE_ERROR = None
 
 
-###############################################################
-# LOAD DIGITAL TWIN ENGINE
-###############################################################
-
 def initialize_engine():
 
     global twin
+
     global ENGINE_READY
+
     global ENGINE_ERROR
 
+    ###########################################################
+    # Reset
+    ###########################################################
+
+    twin = None
+
+    ENGINE_READY = False
+
+    ENGINE_ERROR = None
+
+    ###########################################################
+    # Check data
+    ###########################################################
+
+    if not DATA_FILE:
+
+        ENGINE_ERROR = (
+
+            "Experimental data file could not be found.\n\n"
+
+            "Server directory:\n"
+
+            + BASE_DIR
+
+        )
+
+        return
+
+    ###########################################################
+    # Check models
+    ###########################################################
+
+    if not MODEL_FOLDER:
+
+        ENGINE_ERROR = (
+
+            "AI model folder could not be found.\n\n"
+
+            "Server directory:\n"
+
+            + BASE_DIR
+
+        )
+
+        return
+
+    ###########################################################
+    # Create engine
+    ###########################################################
+
     try:
-
-        print("=" * 70)
-
-        print(
-            "FOOD DIGITAL TWIN - ENGINE INITIALIZATION"
-        )
-
-        print("=" * 70)
-
-        print(
-            f"BASE_DIR   : {BASE_DIR}"
-        )
-
-        print(
-            f"DATA_DIR   : {DATA_DIR}"
-        )
-
-        print(
-            f"MODELS_DIR : {MODELS_DIR}"
-        )
-
-        print(
-            f"DATA FILE  : {LOQUAT_DATA_FILE}"
-        )
-
-        #######################################################
-        # Check data file
-        #######################################################
-
-        if not LOQUAT_DATA_FILE.exists():
-
-            raise FileNotFoundError(
-
-                "Experimental data file not found:\n"
-                f"{LOQUAT_DATA_FILE}\n\n"
-                "Expected location inside GitHub repository:\n"
-                "data/loquat_data.xlsx"
-
-            )
-
-        #######################################################
-        # Check model directory
-        #######################################################
-
-        if not MODELS_DIR.exists():
-
-            raise FileNotFoundError(
-
-                "Models directory not found:\n"
-                f"{MODELS_DIR}\n\n"
-                "Expected location inside GitHub repository:\n"
-                "models/"
-
-            )
-
-        #######################################################
-        # Initialize engine
-        #######################################################
 
         twin = DigitalTwinEngine(
             LOQUAT_CONFIG
@@ -415,37 +676,33 @@ def initialize_engine():
 
         ENGINE_ERROR = None
 
-        print(
-            "Digital Twin Engine: READY"
-        )
-
-        print("=" * 70)
+        print("\nDIGITAL TWIN ENGINE: READY")
 
     except Exception as e:
-
-        twin = None
 
         ENGINE_READY = False
 
         ENGINE_ERROR = (
-            f"{type(e).__name__}: {str(e)}"
+
+            type(e).__name__
+
+            + ": "
+
+            + str(e)
+
         )
 
-        print("=" * 70)
+        print("\nDIGITAL TWIN ENGINE: ERROR")
 
-        print(
-            "Digital Twin Engine: ERROR"
-        )
+        print(ENGINE_ERROR)
 
-        print(
-            ENGINE_ERROR
-        )
+        print("\nFULL ERROR:")
 
-        print("=" * 70)
+        traceback.print_exc()
 
 
 ###############################################################
-# INITIALIZE ENGINE
+# INITIALIZE
 ###############################################################
 
 initialize_engine()
@@ -455,14 +712,13 @@ initialize_engine()
 # REQUEST MODEL
 ###############################################################
 
-class PredictionRequest(BaseModel):
+class PredictionRequest(
+    BaseModel
+):
 
     product: str = Field(
 
-        default="Loquat",
-
-        description=
-            "Product name"
+        default="Loquat"
 
     )
 
@@ -499,7 +755,7 @@ class PredictionRequest(BaseModel):
 
 
 ###############################################################
-# ROOT ENDPOINT
+# ROOT
 ###############################################################
 
 @api.get("/")
@@ -519,14 +775,20 @@ def home():
         "engine_ready":
             ENGINE_READY,
 
-        "product":
-            "Loquat"
+        "data_file":
+            DATA_FILE,
+
+        "model_folder":
+            MODEL_FOLDER,
+
+        "engine_error":
+            ENGINE_ERROR
 
     }
 
 
 ###############################################################
-# HEALTH CHECK
+# HEALTH
 ###############################################################
 
 @api.get("/health")
@@ -553,16 +815,13 @@ def health():
             "healthy",
 
         "engine_ready":
-            True,
-
-        "product":
-            "Loquat"
+            True
 
     }
 
 
 ###############################################################
-# PRODUCT ENDPOINT
+# PRODUCTS
 ###############################################################
 
 @api.get("/products")
@@ -591,54 +850,15 @@ def products():
 
 
 ###############################################################
-# MODEL INFORMATION
-###############################################################
-
-@api.get("/model-info")
-def model_info():
-
-    if not ENGINE_READY:
-
-        return {
-
-            "engine_ready":
-                False,
-
-            "error":
-                ENGINE_ERROR
-
-        }
-
-    return {
-
-        "engine_ready":
-            True,
-
-        "product":
-            twin.product_name,
-
-        "input_features":
-            twin.input_features,
-
-        "targets":
-            list(twin.models.keys()),
-
-        "experimental_data_available":
-            twin.experimental_data is not None,
-
-        "model_count":
-            len(twin.models)
-
-    }
-
-
-###############################################################
-# PREDICTION ENDPOINT
+# PREDICT
 ###############################################################
 
 @api.post("/predict")
 def predict(
-    request: PredictionRequest
+
+    request:
+        PredictionRequest
+
 ):
 
     ###########################################################
@@ -649,7 +869,7 @@ def predict(
 
         raise HTTPException(
 
-            status_code=503,
+            status_code=500,
 
             detail={
 
@@ -657,7 +877,13 @@ def predict(
                     "Digital Twin Engine is not ready.",
 
                 "error":
-                    ENGINE_ERROR
+                    ENGINE_ERROR,
+
+                "data_file":
+                    DATA_FILE,
+
+                "model_folder":
+                    MODEL_FOLDER
 
             }
 
@@ -673,15 +899,13 @@ def predict(
 
             status_code=400,
 
-            detail=(
-                "Currently only Loquat "
-                "is supported."
-            )
+            detail=
+                "Currently only Loquat is supported."
 
         )
 
     ###########################################################
-    # CREATE INPUT
+    # INPUT
     ###########################################################
 
     inputs = {
@@ -698,7 +922,7 @@ def predict(
     }
 
     ###########################################################
-    # RUN DIGITAL TWIN
+    # RUN ENGINE
     ###########################################################
 
     try:
@@ -709,24 +933,18 @@ def predict(
 
     except Exception as e:
 
+        traceback.print_exc()
+
         raise HTTPException(
 
             status_code=500,
 
-            detail={
-
-                "message":
-                    "Digital Twin prediction failed.",
-
-                "error":
-                    str(e)
-
-            }
+            detail=str(e)
 
         )
 
     ###########################################################
-    # RETURN RESULT
+    # RESPONSE
     ###########################################################
 
     return {
@@ -772,8 +990,6 @@ def predict(
 
 ###############################################################
 # RELOAD ENGINE
-#
-# Useful for administration / testing.
 ###############################################################
 
 @api.post("/reload")
@@ -786,6 +1002,12 @@ def reload_engine():
         "engine_ready":
             ENGINE_READY,
 
+        "data_file":
+            DATA_FILE,
+
+        "model_folder":
+            MODEL_FOLDER,
+
         "error":
             ENGINE_ERROR
 
@@ -793,40 +1015,20 @@ def reload_engine():
 
 
 ###############################################################
-# SERVER START
+# SERVER
 ###############################################################
 
 if __name__ == "__main__":
-
-    ###########################################################
-    # Render provides PORT as environment variable.
-    #
-    # Local default = 8000
-    ###########################################################
-
-    port = int(
-        os.environ.get(
-            "PORT",
-            "8000"
-        )
-    )
-
-    ###########################################################
-    # IMPORTANT:
-    #
-    # 0.0.0.0 allows Render / cloud traffic
-    # to reach the application.
-    ###########################################################
 
     uvicorn.run(
 
         "digital_twin_server:api",
 
         host=
-            "0.0.0.0",
+            "127.0.0.1",
 
         port=
-            port,
+            8000,
 
         reload=
             False
